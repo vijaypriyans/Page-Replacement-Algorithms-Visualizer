@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Replacement Algorithms Visualizer</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet loafer-style.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .card {
+            border-radius: 10px;
+        }
+
+        .frame {
+            display: inline-block;
+            background-color: #e9ecef;
+            padding: 8px 12px;
+            margin: 2px;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+
+        .input-group {
+            max-width: 500px;
+        }
+
+        .btn-simulate {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+
+        .btn-simulate:hover {
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container py-5">
+        <h1 class="text-center mb-5">Page Replacement Algorithms Visualizer</h1>
+        <div class="card p-4 mb-5 mx-auto">
+            <div class="mb-3">
+                <label for="referenceString" class="form-label">Page Reference String (comma-separated)</label>
+                <input type="text" class="form-control" id="referenceString" placeholder="e.g., 1,2,3,4,1,2,5">
+            </div>
+            <div class="mb-3">
+                <label for="frameSize" class="form-label">Frame Size</label>
+                <input type="number" class="form-control" id="frameSize" min="1" value="3">
+            </div>
+            <button onclick="simulate()" class="btn btn-simulate w-100">Simulate</button>
+        </div>
+
+        <div class="row">
+            <!-- FIFO -->
+            <div class="col-md-4 mb-4">
+                <div class="card p-4">
+                    <h2 class="card-title mb-4">FIFO</h2>
+                    <div id="fifoFrames" class="mb-4"></div>
+                    <p id="fifoFaults" class="fs-5"></p>
+                </div>
+            </div>
+            <!-- LRU -->
+            <div class="col-md-4 mb-4">
+                <div class="card p-4">
+                    <h2 class="card-title mb-4">LRU</h2>
+                    <div id="lruFrames" class="mb-4"></div>
+                    <p id="lruFaults" class="fs-5"></p>
+                </div>
+            </div>
+            <!-- Optimal -->
+            <div class="col-md-4 mb-4">
+                <div class="card p-4">
+                    <h2 class="card-title mb-4">Optimal</h2>
+                    <div id="optimalFrames" class="mb-4"></div>
+                    <p id="optimalFaults" class="fs-5"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS (with Popper.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function simulate() {
+            const refString = document.getElementById('referenceString').value.split(',').map(Number);
+            const frameSize = parseInt(document.getElementById('frameSize').value);
+
+            if (!refString.every(n => !isNaN(n)) || frameSize < 1) {
+                alert('Please enter a valid page reference string and frame size.');
+                return;
+            }
+
+            const fifoResult = fifo(refString, frameSize);
+            const lruResult = lru(refString, frameSize);
+            const optimalResult = optimal(refString, frameSize);
+
+            displayResults('fifo', fifoResult.frames, fifoResult.faults);
+            displayResults('lru', lruResult.frames, lruResult.faults);
+            displayResults('optimal', optimalResult.frames, optimalResult.faults);
+        }
+
+        function fifo(refString, frameSize) {
+            let frames = [];
+            let faults = 0;
+            let queue = [];
+            let frameStates = [];
+
+            for (let page of refString) {
+                if (!frames.includes(page)) {
+                    if (frames.length < frameSize) {
+                        frames.push(page);
+                        queue.push(page);
+                    } else {
+                        const oldest = queue.shift();
+                        frames[frames.indexOf(oldest)] = page;
+                        queue.push(page);
+                        faults++;
+                    }
+                }
+                frameStates.push([...frames]);
+            }
+            if (frameStates.length > 0 && !frameStates[0].includes(refString[0])) faults++;
+            return { frames: frameStates, faults };
+        }
+
+        function lru(refString, frameSize) {
+            let frames = [];
+            let faults = 0;
+            let recent = [];
+            let frameStates = [];
+
+            for (let page of refString) {
+                if (!frames.includes(page)) {
+                    if (frames.length < frameSize) {
+                        frames.push(page);
+                    } else {
+                        const lruPage = recent.shift();
+                        frames[frames.indexOf(lruPage)] = page;
+                        faults++;
+                    }
+                } else {
+                    recent.splice(recent.indexOf(page), 1);
+                }
+                recent.push(page);
+                frameStates.push([...frames]);
+            }
+            if (frameStates.length > 0 && !frameStates[0].includes(refString[0])) faults++;
+            return { frames: frameStates, faults };
+        }
+
+        function optimal(refString, frameSize) {
+            let frames = [];
+            let faults = 0;
+            let frameStates = [];
+
+            for (let i = 0; i < refString.length; i++) {
+                const page = refString[i];
+                if (!frames.includes(page)) {
+                    if (frames.length < frameSize) {
+                        frames.push(page);
+                    } else {
+                        let farthest = -1, replaceIdx = 0;
+                        for (let j = 0; j < frames.length; j++) {
+                            let nextUse = refString.slice(i + 1).indexOf(frames[j]);
+                            if (nextUse === -1) {
+                                replaceIdx = j;
+                                break;
+                            }
+                            if (nextUse > farthest) {
+                                farthest = nextUse;
+                                replaceIdx = j;
+                            }
+                        }
+                        frames[replaceIdx] = page;
+                        faults++;
+                    }
+                }
+                frameStates.push([...frames]);
+            }
+            if (frameStates.length > 0 && !frameStates[0].includes(refString[0])) faults++;
+            return { frames: frameStates, faults };
+        }
+
+        function displayResults(algorithm, frameStates, faults) {
+            const container = document.getElementById(`${algorithm}Frames`);
+            container.innerHTML = '';
+            frameStates.forEach((state, i) => {
+                const frameDiv = document.createElement('div');
+                frameDiv.className = 'mb-2';
+                frameDiv.innerHTML = `<span class="fw-medium">Step ${i + 1}:</span> `;
+                state.forEach(page => {
+                    const pageDiv = document.createElement('span');
+                    pageDiv.className = 'frame';
+                    pageDiv.textContent = page || '-';
+                    frameDiv.appendChild(pageDiv);
+                });
+                container.appendChild(frameDiv);
+            });
+            document.getElementById(`${algorithm}Faults`).textContent = `Page Faults: ${faults}`;
+        }
+    </script>
+</body>
+
+</html>
